@@ -2,6 +2,7 @@
 package utils
 
 import (
+	"fmt"
 	"reflect"
 
 	log "github.com/sirupsen/logrus"
@@ -31,7 +32,7 @@ func NewInformerGenerator(cs kubernetes.Interface, objType, ns string) *Informer
 }
 
 // GetInformer returns a new shared informer for the specified type
-func (g *InformerGenerator) GetInformer() cache.SharedIndexInformer {
+func (g *InformerGenerator) GetInformer() (cache.SharedIndexInformer, error) {
 
 	// Create a new shared informer factory
 	factory := informers.NewFilteredSharedInformerFactory(g.clientSet, 0, g.namespace, nil)
@@ -49,16 +50,19 @@ func (g *InformerGenerator) GetInformer() cache.SharedIndexInformer {
 		informer = factory.Apps().V1().StatefulSets().Informer()
 	default:
 		log.Errorf("unsupported type: %s", g.objType)
-		return nil
+		// TODO: add custom error types?
+		return nil, fmt.Errorf("unsupported type: %s", g.objType)
 	}
 
 	return g.AddEventHandler(informer)
 }
 
 // AddEventHandler adds event handlers to the informer
-func (g *InformerGenerator) AddEventHandler(informer cache.SharedIndexInformer) cache.SharedIndexInformer {
+func (g *InformerGenerator) AddEventHandler(informer cache.SharedIndexInformer) (cache.SharedIndexInformer, error) {
+	var err error
+
 	// Add handler functions for events
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			log.Printf("%s added: %s", g.objType, g.GetName(obj))
 		},
@@ -70,7 +74,7 @@ func (g *InformerGenerator) AddEventHandler(informer cache.SharedIndexInformer) 
 		},
 	})
 
-	return informer
+	return informer, err
 }
 
 // GetName returns the name of the object
